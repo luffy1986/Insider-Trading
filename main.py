@@ -187,7 +187,7 @@ def insider_trading_all(symbolList, endDate, sales):
                                            'Sector' : sector,
                                            'Percent Held By Insiders' : percentHeldByInsiders,
                                            'Percent Held by Institutions' : percentHeldByInstitution,
-                                           'Short Perent' : shortPercent},
+                                           'Short Percent' : shortPercent},
                                             index = [0])
 
                     new_df.set_index('Symbol', inplace=True)
