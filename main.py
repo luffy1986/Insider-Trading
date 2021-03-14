@@ -18,6 +18,7 @@ import sys
 import yahoo_fin.stock_info as si
 from functools import partial
 import yfinance as yf
+from pytickersymbols import PyTickerSymbols
 
 def return_calc(symbol, start, end):
     data = web.DataReader(symbol, 'yahoo', start, end)
@@ -62,8 +63,7 @@ def getCIKs(ticker):
         results[0] = int(re.sub('\.[0]*', '.', results[0]))
         cik_dict[str(ticker).upper()] = str(results[0])
     #f = open('cik_dict', 'w')   
-    #f.close()
-    print(results)
+    #f.close(
     return results[0]
     
 def tickerReNaming(ticker, type=0):
@@ -88,7 +88,6 @@ def tickerReNaming(ticker, type=0):
             breakUp=ticker.split(".")
             newTicker =breakUp[0]+"-"+breakUp[1]
 
-    print(newTicker)
     return newTicker
 
 def to_soup(url):
@@ -164,7 +163,6 @@ def insider_trading_all(symbolList, endDate, sales):
                 return_y = return_calc(newTicker, start_yahoo, end_yahoo)
                 lastDate = df['Transaction Date'][0]
                 
-                print("Ticker=%s num_purch=%d num_sale=%d" %(newTicker, num_purch, num_sale)) 
                 if (sales == 1 and (num_purch != 0 or num_sale != 0)) or (sales == 0 and num_purch != 0):
                     quoteTable = si.get_quote_table(newTicker)
                     avgVolume = quoteTable["Avg. Volume"]
@@ -227,7 +225,12 @@ if __name__ == '__main__':
     if args.stocklist:
         l1 = args.stocklist.split(',')
     else:
-        l1 = si.tickers_sp500() + si.tickers_dow() + si.tickers_nasdaq() + si.tickers_other() 
+        stockData = PyTickerSymbols()
+        dow = []
+        l1 = list(stockData.get_stocks_by_index('DOW JONES'))
+        for i in range(0,len(l1)):
+            dow.append(l1[i]['symbol'])
+        l1 = si.tickers_sp500() + si.tickers_nasdaq() + si.tickers_other() + dow 
         l1 = list(set(l1))
         l1.sort()
         l1.pop(0)
