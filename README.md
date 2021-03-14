@@ -2,6 +2,7 @@
 To track insider trading by scraping SEC website and Yahoo finance
 
 -h, --help            show this help message and exit
+
 -days DAYS, --days DAYS
                       To specify how many days from today do you want to look for insider trading. Default value is 30 days
 
