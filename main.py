@@ -53,6 +53,24 @@ def calculateDiffBwDates(date1, date2):
 def dateConversion(year, month, day):
     return datetime.date(year, month, day)
     
+def calculateMarketValue(mktvalue):
+        value = 0
+        if re.search(r'K', mktvalue):
+            value = mktvalue.split('K')
+            value = int((float(value[0])) * 1000)
+        elif re.search(r'M', mktvalue):
+            value = mktvalue.split('M')
+            value = int((float(value[0])) * 1000000)
+        elif re.search(r'B', mktvalue):
+            value = mktvalue.split('B')
+            value = int((float(value[0])) * 1000000000)
+        elif re.search(r'T', mktvalue):
+            value = mktvalue.split('T')
+            value = int((float(value[0])) * 1000000000000)
+        else:
+            print("Error we have a different denomination %s" %(mktvalue))
+        return value 
+    
 def getCIKs(ticker):
     URL = 'https://www.sec.gov/cgi-bin/browse-edgar?CIK={}&Find=Search&owner=exclude&action=getcompany'
     CIK_RE = re.compile(r'.*CIK=(\d{10}).*')    
@@ -96,7 +114,7 @@ def to_soup(url):
     soup = BeautifulSoup(webpage, 'html.parser')
     return soup
 
-def insider_trading_all(symbolList, endDate, sales):
+def insider_trading_all(symbolList, endDate, sales, marketCap):
     symbols = []
     if isinstance(symbolList, list):
         symbols = symbolList
@@ -110,12 +128,29 @@ def insider_trading_all(symbolList, endDate, sales):
         for i in range(len(symbols)):
             try:
                 lst = [symbols[i]]
-                newTicker = tickerReNaming(lst[0], 0)
+                if not re.search(r"\$", lst[0]):
+                    newTicker = tickerReNaming(lst[0], 0)
+                else:
+                    pbar.update(1)
+                    continue
                 cik = getCIKs(newTicker)
+                quoteTable = si.get_quote_table(newTicker)
+                avgVolume = quoteTable["Avg. Volume"]
+                mktCap = quoteTable["Market Cap"]
+                if mktCap != "nan":
+                    value = calculateMarketValue(mktCap)
+                else:
+                    pbar.update(1)
+                    continue
+                if value < marketCap:
+                    pbar.update(1)
+                    continue
+
                 page = 0
                 beg_url = 'https://www.sec.gov/cgi-bin/own-disp?action=getissuer&CIK='+str(cik)+'&type=&dateb=&owner=include&start='+str(page*80)
                 urls = [beg_url]
                 df_data = []
+                #noData = False
                 for url in urls:
                     soup = to_soup(url)
                     transaction_report = soup.find('table', {'id':'transaction-report'})
@@ -126,7 +161,10 @@ def insider_trading_all(symbolList, endDate, sales):
                     headers = [ i for i in t_cont[0].get_text().split('\n') if i != '']
                     data_rough = [i for lst in t_cont[1:] for i in lst.get_text().split('\n') if i != '' ]
                     data = [data_rough[i:i+12] for i in range(0,len(data_rough), 12)]
-                    last_line = data[-1]
+                    if data:
+                        last_line = data[-1]
+                    else:
+                        noData = True
                     for i in data:
                         diff = calculateDiffBwDates(i[1], end)
                         if (diff < 0):
@@ -139,6 +177,9 @@ def insider_trading_all(symbolList, endDate, sales):
                                 page += 1
                                 urls.append('https://www.sec.gov/cgi-bin/own-disp?action=getissuer&CIK='+str(cik)+'&type=&dateb=&owner=include&start='+str(page*80))
 
+                #if noData == True:
+                #    pbar.update(1)
+                #    continue
                 df = pd.DataFrame(df_data,columns = headers)
                 df['Purch'] = pd.to_numeric(df['Transaction Type'].apply(lambda x: 1 if x == 'P-Purchase' else 0)
                                *df['Number of Securities Transacted'])
@@ -161,12 +202,9 @@ def insider_trading_all(symbolList, endDate, sales):
                     avg_sale = 0
                     ratio = num_purch
                 return_y = return_calc(newTicker, start_yahoo, end_yahoo)
-                lastDate = df['Transaction Date'][0]
-                
+               
                 if (sales == 1 and (num_purch != 0 or num_sale != 0)) or (sales == 0 and num_purch != 0):
-                    quoteTable = si.get_quote_table(newTicker)
-                    avgVolume = quoteTable["Avg. Volume"]
-                    mktCap = quoteTable["Market Cap"]
+                    lastDate = df['Transaction Date'][0]
                     ticker = yf.Ticker(newTicker)
                     sector = ticker.info['sector']
                     percentHeldByInsiders = ticker.info['heldPercentInsiders'] * 100
@@ -193,7 +231,10 @@ def insider_trading_all(symbolList, endDate, sales):
                     new_df.set_index('Symbol', inplace=True)
                     dfs.append(new_df)
                 pbar.update(1)
-            except:
+            except Exception as ex:
+                #template = "An exception of type {0} occurred. Arguments:\n{1!r}"
+                #message = template.format(type(ex).__name__, ex.args)
+                #print(message)
                 pbar.update(1)
                 continue
 
@@ -208,6 +249,7 @@ if __name__ == '__main__':
     parser.add_argument("-filename", "--filename", action="store", help="To specify a filename for xlsx. Default name is insider_trading")
     parser.add_argument("-stocklist", "--stocklist", action="store", help="To specify a list of stocks on which to see insider trading. Default list of stocks will be based out of yahoo finance using yahoo_fin python library.")
     parser.add_argument("-insidersales", "--insidersales", action="store", help="To specify if you want to see insider selling in the stocks. Default is 0") 
+    parser.add_argument("-mktcap", "--mktcap", action="store", help="To specify the minimum market cap as a criteria for insider trading. You can pass values like 1.5B, 100M. Default is 0") 
     args = parser.parse_args()
 
     if args.days:
@@ -243,6 +285,10 @@ if __name__ == '__main__':
             insiderSales = value
     else:
         insiderSales = 0
+    if args.mktcap:
+        marketCap = calculateMarketValue(args.mktcap)
+    else:
+        marketCap = 0
 
 
     print(days)
@@ -250,6 +296,7 @@ if __name__ == '__main__':
     print(fileName)
     print(l1)
     print(insiderSales)
+    print(marketCap)
     
     if os.path.exists(fileName):
         os.remove(fileName)
@@ -261,7 +308,7 @@ if __name__ == '__main__':
     date = str(year) + "-" + str(month) + "-" + str(day)
    
     pool = Pool(processes=noOfProcesses)
-    part = partial(insider_trading_all, endDate=date, sales=insiderSales)
+    part = partial(insider_trading_all, endDate=date, sales=insiderSales, marketCap=marketCap)
     dfs = list(pool.map(part, l1))
 
     flag = True
