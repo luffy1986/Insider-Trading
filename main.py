@@ -19,6 +19,12 @@ import yahoo_fin.stock_info as si
 from functools import partial
 import yfinance as yf
 from pytickersymbols import PyTickerSymbols
+import matplotlib.pyplot as plt
+import numpy as np
+
+def func(pct, allvalues): 
+    absolute = int(pct / 100.*np.sum(allvalues)) 
+    return "{:.1f}%\n({:d})".format(pct, absolute)
 
 def return_calc(symbol, start, end):
     data = web.DataReader(symbol, 'yahoo', start, end)
@@ -323,3 +329,30 @@ if __name__ == '__main__':
         combo.to_excel(fileName, index = True)
     else:
         print("There is no insider trading on any of the tickers")
+        sys.exit(1)
+
+    sectorList = []
+    for i in range(0, len(dfs)):
+        sectorList.append(dfs[i]['Sector'][0])
+
+    #print(sectorList)
+    uniqueSectorList = list(set(sectorList))
+    #print(uniqueSectorList)
+    uniqueSectorList = [x for x in sectorList if x != " "]
+    #print(uniqueSectorList)
+    sectorListDict = {}
+    for i in range(0, len(sectorList)):
+        for j in range(0, len(uniqueSectorList)):
+            if sectorList[i] == uniqueSectorList[j]:
+                if uniqueSectorList[j] in sectorListDict:
+                    sectorListDict[uniqueSectorList[j]] = sectorListDict[uniqueSectorList[j]] + 1
+                else:
+                    sectorListDict[uniqueSectorList[j]] = 1
+    #print(sectorListDict)
+    data = (list(sectorListDict.values()))
+    # Creating plot 
+    fig = plt.figure(figsize =(10, 7)) 
+    plt.pie(data, autopct = lambda pct: func(pct, data), labels = uniqueSectorList) 
+      
+    # show plot 
+    plt.show() 
