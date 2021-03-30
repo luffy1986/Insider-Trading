@@ -303,10 +303,14 @@ if __name__ == '__main__':
     print(l1)
     print(insiderSales)
     print(marketCap)
+    sectorList = []
+    sectorListDict = {}
+    filterDfs = []
+    dfs = []
     
     if os.path.exists(fileName):
         os.remove(fileName)
-    dfs = []
+
     earlierDate = calculateDateFromGivenDate(days)
     year = "%04d" % (earlierDate.year)
     month = "%02d" % (earlierDate.month)
@@ -317,42 +321,35 @@ if __name__ == '__main__':
     part = partial(insider_trading_all, endDate=date, sales=insiderSales, marketCap=marketCap)
     dfs = list(pool.map(part, l1))
 
-    flag = True
     for i in range(0, len(dfs)):
         if not isinstance(dfs[i], type(None)):
-            flag = False
-            break
+            filterDfs.append(dfs[i])
 
-    if flag == False: 
-        combo = pd.concat(dfs)
+    if len(filterDfs) > 0: 
+        combo = pd.concat(filterDfs)
         combo.sort_values('Buy/Sell Ratio', inplace=True, ascending=False) 
         combo.to_excel(fileName, index = True)
+        for i in range(0, len(filterDfs)):
+            sectorList.append(filterDfs[i]['Sector'][0])
+
+        uniqueSectorList = list(set(sectorList))
+        uniqueSectorList = [x for x in uniqueSectorList if x != " "]
+        for i in range(0, len(sectorList)):
+            for j in range(0, len(uniqueSectorList)):
+                if sectorList[i] == uniqueSectorList[j]:
+                    if uniqueSectorList[j] in sectorListDict:
+                        sectorListDict[uniqueSectorList[j]] = sectorListDict[uniqueSectorList[j]] + 1
+                    else:
+                        sectorListDict[uniqueSectorList[j]] = 1
+
+        data = (list(sectorListDict.values()))
+        # Creating plot 
+        fig = plt.figure(figsize =(10, 7)) 
+        plt.pie(data, autopct = lambda pct: func(pct, data), labels = uniqueSectorList) 
+          
+        # show plot 
+        plt.show() 
     else:
         print("There is no insider trading on any of the tickers")
         sys.exit(1)
 
-    sectorList = []
-    for i in range(0, len(dfs)):
-        sectorList.append(dfs[i]['Sector'][0])
-
-    #print(sectorList)
-    uniqueSectorList = list(set(sectorList))
-    #print(uniqueSectorList)
-    uniqueSectorList = [x for x in sectorList if x != " "]
-    #print(uniqueSectorList)
-    sectorListDict = {}
-    for i in range(0, len(sectorList)):
-        for j in range(0, len(uniqueSectorList)):
-            if sectorList[i] == uniqueSectorList[j]:
-                if uniqueSectorList[j] in sectorListDict:
-                    sectorListDict[uniqueSectorList[j]] = sectorListDict[uniqueSectorList[j]] + 1
-                else:
-                    sectorListDict[uniqueSectorList[j]] = 1
-    #print(sectorListDict)
-    data = (list(sectorListDict.values()))
-    # Creating plot 
-    fig = plt.figure(figsize =(10, 7)) 
-    plt.pie(data, autopct = lambda pct: func(pct, data), labels = uniqueSectorList) 
-      
-    # show plot 
-    plt.show() 
