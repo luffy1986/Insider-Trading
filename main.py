@@ -18,7 +18,6 @@ import sys
 import yahoo_fin.stock_info as si
 from functools import partial
 import yfinance as yf
-from pytickersymbols import PyTickerSymbols
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -120,7 +119,7 @@ def to_soup(url):
     soup = BeautifulSoup(webpage, 'html.parser')
     return soup
 
-def insider_trading_all(symbolList, endDate, sales, marketCap):
+def insider_trading_all(symbolList, endDate, sales, buys, marketCap):
     symbols = []
     if isinstance(symbolList, list):
         symbols = symbolList
@@ -209,7 +208,7 @@ def insider_trading_all(symbolList, endDate, sales, marketCap):
                     ratio = num_purch
                 return_y = return_calc(newTicker, start_yahoo, end_yahoo)
                
-                if (sales == 1 and (num_purch != 0 or num_sale != 0)) or (sales == 0 and num_purch != 0):
+                if (sales == 1 and buys == 1 and (num_purch != 0 or num_sale != 0)) or (sales == 0 and buys == 1 and num_purch != 0) or (sales == 1 and buys == 0 and num_sale != 0):
                     lastDate = df['Transaction Date'][0]
                     ticker = yf.Ticker(newTicker)
                     sector = ticker.info['sector']
@@ -255,6 +254,7 @@ if __name__ == '__main__':
     parser.add_argument("-filename", "--filename", action="store", help="To specify a filename for xlsx. Default name is insider_trading")
     parser.add_argument("-stocklist", "--stocklist", action="store", help="To specify a list of stocks on which to see insider trading. Default list of stocks will be based out of yahoo finance using yahoo_fin python library.")
     parser.add_argument("-insidersales", "--insidersales", action="store", help="To specify if you want to see insider selling in the stocks. Default is 0") 
+    parser.add_argument("-insiderbuys", "--insiderbuys", action="store", help="To specify if you want to see insider buying in the stocks. Default is 1") 
     parser.add_argument("-mktcap", "--mktcap", action="store", help="To specify the minimum market cap as a criteria for insider trading. You can pass values like 1.5B, 100M. Default is 0") 
     args = parser.parse_args()
 
@@ -273,12 +273,7 @@ if __name__ == '__main__':
     if args.stocklist:
         l1 = args.stocklist.split(',')
     else:
-        stockData = PyTickerSymbols()
-        dow = []
-        l1 = list(stockData.get_stocks_by_index('DOW JONES'))
-        for i in range(0,len(l1)):
-            dow.append(l1[i]['symbol'])
-        l1 = si.tickers_sp500() + si.tickers_nasdaq() + si.tickers_other() + dow 
+        l1 = si.tickers_sp500() + si.tickers_nasdaq() + si.tickers_other() + si.tickers_dow() 
         l1 = list(set(l1))
         l1.sort()
         l1.pop(0)
@@ -291,17 +286,30 @@ if __name__ == '__main__':
             insiderSales = value
     else:
         insiderSales = 0
+    if args.insiderbuys:
+        value = int(args.insiderbuys)
+        if value > 1:
+            print("ERROR insider sales value can only be 0 or 1 and you have passed %d" %(value))
+            sys.exit(1)
+        else:
+            insiderBuys = value
+    else:
+        insiderBuys = 1
     if args.mktcap:
         marketCap = calculateMarketValue(args.mktcap)
     else:
         marketCap = 0
 
+    if insiderSales == 0 and insiderBuys == 0:
+        print("You gave incorrect values for insider insiderBuysing and selling. Atleast 1 of them should be set")
+        sys.exit(1)
 
     print(days)
     print(noOfProcesses)
     print(fileName)
     print(l1)
     print(insiderSales)
+    print(insiderBuys)
     print(marketCap)
     sectorList = []
     sectorListDict = {}
@@ -318,7 +326,7 @@ if __name__ == '__main__':
     date = str(year) + "-" + str(month) + "-" + str(day)
    
     pool = Pool(processes=noOfProcesses)
-    part = partial(insider_trading_all, endDate=date, sales=insiderSales, marketCap=marketCap)
+    part = partial(insider_trading_all, endDate=date, sales=insiderSales, buys=insiderBuys, marketCap=marketCap)
     dfs = list(pool.map(part, l1))
 
     for i in range(0, len(dfs)):
