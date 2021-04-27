@@ -18,3 +18,16 @@ To track insider trading by scraping SEC website and Yahoo finance
 
 -insidersales INSIDERSALES, --insidersales INSIDERSALES
                         To specify if you want to see insider selling in the stocks. Default is 0
+
+-insiderbuys INSIDERBUYS, --insiderbuys INSIDERBUYS
+                      To specify if you want to see insider buying in the stocks. Default is 1
+
+-mktcap MKTCAP, --mktcap MKTCAP
+                      To specify the minimum market cap as a criteria for insider trading. You can pass values like
+                      1.5B, 100M. Default is 0
+
+-startdate STARTDATE, --startdate STARTDATE
+                      To specify the starting date to track insider buying. The format is YYYY-MM-DD for eg: 2020-12-21
+
+-enddate ENDDATE, --enddate ENDDATE
+                      To specify the end date to track insider buying. The format is YYY-MM-DD for eg: 2020-12-21

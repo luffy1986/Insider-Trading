@@ -119,7 +119,7 @@ def to_soup(url):
     soup = BeautifulSoup(webpage, 'html.parser')
     return soup
 
-def insider_trading_all(symbolList, endDate, sales, buys, marketCap):
+def insider_trading_all(symbolList, days, endDate, startDate, sales, buys, marketCap):
     symbols = []
     if isinstance(symbolList, list):
         symbols = symbolList
@@ -127,7 +127,10 @@ def insider_trading_all(symbolList, endDate, sales, buys, marketCap):
         symbols.append(symbolList)
     end = endDate
     start_yahoo = extractDate(end)
-    end_yahoo = todayDate() 
+    if days > 0:
+        end_yahoo = todayDate()
+    else:
+        end_yahoo = extractDate(startDate)
     dfs = []
     with tqdm(total = len(symbols)) as pbar:
         for i in range(len(symbols)):
@@ -256,12 +259,14 @@ if __name__ == '__main__':
     parser.add_argument("-insidersales", "--insidersales", action="store", help="To specify if you want to see insider selling in the stocks. Default is 0") 
     parser.add_argument("-insiderbuys", "--insiderbuys", action="store", help="To specify if you want to see insider buying in the stocks. Default is 1") 
     parser.add_argument("-mktcap", "--mktcap", action="store", help="To specify the minimum market cap as a criteria for insider trading. You can pass values like 1.5B, 100M. Default is 0") 
+    parser.add_argument("-startdate", "--startdate", action="store", help="To specify the starting date to track insider buying. The format is YYYY-MM-DD for eg: 2020-12-21") 
+    parser.add_argument("-enddate", "--enddate", action="store", help="To specify the end date to track insider buying. The format is YYY-MM-DD for eg: 2020-12-21") 
     args = parser.parse_args()
 
+    days = 0
+    constDate = str("0001") + "-" + str("01") + "-" + str("01")
     if args.days:
         days = int(args.days)
-    else:
-        days = 30
     if args.processes:
         noOfProcesses = int(args.processes)
     else:
@@ -299,10 +304,30 @@ if __name__ == '__main__':
         marketCap = calculateMarketValue(args.mktcap)
     else:
         marketCap = 0
+    if args.startdate:
+        startDate = args.startdate
+    else:
+        startDate = constDate 
+    if args.enddate:
+        endDate = args.enddate
+    else:
+        endDate = constDate 
 
+    startDateYear = extractDate(startDate).year
+    endDateYear = extractDate(endDate).year
     if insiderSales == 0 and insiderBuys == 0:
         print("You gave incorrect values for insider insiderBuysing and selling. Atleast 1 of them should be set")
         sys.exit(1)
+
+    if startDateYear != 1 and endDateYear != 1 and days != 0:
+        print("You cannot provide a start date, an end date and days as runtime argument. You can either provide days or start date and end date")
+        sys.exit(1)
+    else:
+        if startDateYear == 1 and endDateYear == 1 and days == 0:
+            days = 30
+        elif (startDateYear == 1 and endDateYear != 1) or (startDateYear != 1 and endDateYear == 1):
+            print("You forgot to provide either start date or end date. Please check again")
+            sys.exit(1)
 
     print(days)
     print(noOfProcesses)
@@ -311,6 +336,9 @@ if __name__ == '__main__':
     print(insiderSales)
     print(insiderBuys)
     print(marketCap)
+    print(startDate)
+    print(endDate)
+
     sectorList = []
     sectorListDict = {}
     filterDfs = []
@@ -319,14 +347,18 @@ if __name__ == '__main__':
     if os.path.exists(fileName):
         os.remove(fileName)
 
-    earlierDate = calculateDateFromGivenDate(days)
-    year = "%04d" % (earlierDate.year)
-    month = "%02d" % (earlierDate.month)
-    day = "%02d" % (earlierDate.day)
-    date = str(year) + "-" + str(month) + "-" + str(day)
+    if days > 0:
+        earlierDate = calculateDateFromGivenDate(days)
+        year = "%04d" % (earlierDate.year)
+        month = "%02d" % (earlierDate.month)
+        day = "%02d" % (earlierDate.day)
+        date = str(year) + "-" + str(month) + "-" + str(day)
+    else:
+        date = startDate
+
    
     pool = Pool(processes=noOfProcesses)
-    part = partial(insider_trading_all, endDate=date, sales=insiderSales, buys=insiderBuys, marketCap=marketCap)
+    part = partial(insider_trading_all, days=days, endDate=date, startDate=endDate, sales=insiderSales, buys=insiderBuys, marketCap=marketCap)
     dfs = list(pool.map(part, l1))
 
     for i in range(0, len(dfs)):
@@ -350,6 +382,7 @@ if __name__ == '__main__':
                     else:
                         sectorListDict[uniqueSectorList[j]] = 1
 
+        sectorListDict = dict(sorted(sectorListDict.items(), key=lambda item: item[1]))
         data = (list(sectorListDict.values()))
         # Creating plot 
         fig = plt.figure(figsize =(10, 7)) 
