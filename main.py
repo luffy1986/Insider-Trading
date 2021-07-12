@@ -81,7 +81,9 @@ def getCIKs(ticker):
     CIK_RE = re.compile(r'.*CIK=(\d{10}).*')    
     cik_dict = {}
     f = requests.get(URL.format(ticker), stream = True)
+    print(f)
     results = CIK_RE.findall(f.text)
+    print(results)
     if len(results):
         results[0] = int(re.sub('\.[0]*', '.', results[0]))
         cik_dict[str(ticker).upper()] = str(results[0])
@@ -118,8 +120,19 @@ def to_soup(url):
     webpage = url_response.content
     soup = BeautifulSoup(webpage, 'html.parser')
     return soup
+    
+def extractTable(table):
+    datasets = []
+    # The first tr contains the field names.
+    headings = [th.get_text() for th in table.find("tr").find_all("th")]
+    
+    for row in table.find_all("tr")[1:]:
+        dataset = zip(headings, (td.get_text() for td in row.find_all("td")))
+        datasets.append(dataset)
 
-def insider_trading_all(symbolList, days, endDate, startDate, sales, buys, marketCap):
+    return datasets
+
+def insider_trading_all(symbolList, days, endDate, startDate, sales, buys, marketCap, cikDict):
     symbols = []
     if isinstance(symbolList, list):
         symbols = symbolList
@@ -141,7 +154,8 @@ def insider_trading_all(symbolList, days, endDate, startDate, sales, buys, marke
                 else:
                     pbar.update(1)
                     continue
-                cik = getCIKs(newTicker)
+                #cik = getCIKs(newTicker)
+                cik = cikDict[newTicker.lower()]
                 quoteTable = si.get_quote_table(newTicker)
                 avgVolume = quoteTable["Avg. Volume"]
                 mktCap = quoteTable["Market Cap"]
@@ -174,16 +188,18 @@ def insider_trading_all(symbolList, days, endDate, startDate, sales, buys, marke
                     else:
                         noData = True
                     for i in data:
-                        diff = calculateDiffBwDates(i[1], end)
-                        if (diff < 0):
-                            break
-                        else:
-                            if (i != last_line):
-                                df_data.append(i)
+                        if re.search(r"\d\d\d\d-\d\d-\d\d", i[1]):
+                        #if i[1] != "-" and i[1] and not i[1].isspace():
+                            diff = calculateDiffBwDates(i[1], end)
+                            if (diff < 0):
+                                break
                             else:
-                                df_data.append(i)
-                                page += 1
-                                urls.append('https://www.sec.gov/cgi-bin/own-disp?action=getissuer&CIK='+str(cik)+'&type=&dateb=&owner=include&start='+str(page*80))
+                                if (i != last_line):
+                                    df_data.append(i)
+                                else:
+                                    df_data.append(i)
+                                    page += 1
+                                    urls.append('https://www.sec.gov/cgi-bin/own-disp?action=getissuer&CIK='+str(cik)+'&type=&dateb=&owner=include&start='+str(page*80))
 
                 #if noData == True:
                 #    pbar.update(1)
@@ -209,7 +225,8 @@ def insider_trading_all(symbolList, days, endDate, startDate, sales, buys, marke
                 else:
                     avg_sale = 0
                     ratio = num_purch
-                return_y = return_calc(newTicker, start_yahoo, end_yahoo)
+                return_y = 0 
+                #return_y = return_calc(newTicker, start_yahoo, end_yahoo)
                
                 if (sales == 1 and buys == 1 and (num_purch != 0 or num_sale != 0)) or (sales == 0 and buys == 1 and num_purch != 0) or (sales == 1 and buys == 0 and num_sale != 0):
                     lastDate = df['Transaction Date'][0]
@@ -240,9 +257,9 @@ def insider_trading_all(symbolList, days, endDate, startDate, sales, buys, marke
                     dfs.append(new_df)
                 pbar.update(1)
             except Exception as ex:
-                #template = "An exception of type {0} occurred. Arguments:\n{1!r}"
-                #message = template.format(type(ex).__name__, ex.args)
-                #print(message)
+                template = "An exception of type {0} occurred. Arguments:\n{1!r}"
+                message = template.format(type(ex).__name__, ex.args)
+                print(message)
                 pbar.update(1)
                 continue
 
@@ -282,6 +299,11 @@ if __name__ == '__main__':
         l1 = list(set(l1))
         l1.sort()
         l1.pop(0)
+        tickerList = []
+        for i,ticker in enumerate(l1):
+            if not re.search(r"\$", ticker):
+                tickerList.append(ticker)
+        l1 = tickerList
     if args.insidersales:
         value = int(args.insidersales)
         if value > 1:
@@ -343,6 +365,7 @@ if __name__ == '__main__':
     sectorListDict = {}
     filterDfs = []
     dfs = []
+    cikDict = {}
     
     if os.path.exists(fileName):
         os.remove(fileName)
@@ -357,8 +380,15 @@ if __name__ == '__main__':
         date = startDate
 
    
+    url ="https://www.sec.gov/include/ticker.txt"
+    soup = to_soup(url)
+    data = soup.get_text().split("\n")
+    for i in range(0, len(data)):
+        ticker, cikId = data[i].split("\t")
+        cikDict[ticker] = cikId
+
     pool = Pool(processes=noOfProcesses)
-    part = partial(insider_trading_all, days=days, endDate=date, startDate=endDate, sales=insiderSales, buys=insiderBuys, marketCap=marketCap)
+    part = partial(insider_trading_all, days=days, endDate=date, startDate=endDate, sales=insiderSales, buys=insiderBuys, marketCap=marketCap, cikDict=cikDict)
     dfs = list(pool.map(part, l1))
 
     for i in range(0, len(dfs)):
