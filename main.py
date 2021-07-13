@@ -225,8 +225,7 @@ def insider_trading_all(symbolList, days, endDate, startDate, sales, buys, marke
                 else:
                     avg_sale = 0
                     ratio = num_purch
-                return_y = 0 
-                #return_y = return_calc(newTicker, start_yahoo, end_yahoo)
+                return_y = return_calc(newTicker, start_yahoo, end_yahoo)
                
                 if (sales == 1 and buys == 1 and (num_purch != 0 or num_sale != 0)) or (sales == 0 and buys == 1 and num_purch != 0) or (sales == 1 and buys == 0 and num_sale != 0):
                     lastDate = df['Transaction Date'][0]
@@ -257,9 +256,9 @@ def insider_trading_all(symbolList, days, endDate, startDate, sales, buys, marke
                     dfs.append(new_df)
                 pbar.update(1)
             except Exception as ex:
-                template = "An exception of type {0} occurred. Arguments:\n{1!r}"
-                message = template.format(type(ex).__name__, ex.args)
-                print(message)
+                #template = "An exception of type {0} occurred. Arguments:\n{1!r}"
+                #message = template.format(type(ex).__name__, ex.args)
+                #print(message)
                 pbar.update(1)
                 continue
 
@@ -380,7 +379,7 @@ if __name__ == '__main__':
         date = startDate
 
    
-    url ="https://www.sec.gov/include/ticker.txt"
+    url = "https://www.sec.gov/include/ticker.txt"
     soup = to_soup(url)
     data = soup.get_text().split("\n")
     for i in range(0, len(data)):
